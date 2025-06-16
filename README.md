@@ -1,171 +1,119 @@
-# provacrud
+js do código:
 
+// Recupera os pedidos do LocalStorage ou cria um array vazio se não tiver nada salvo
+let pedidos = JSON.parse(localStorage.getItem("pedidos")) || [];
 
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <title>Gerenciador de Marmitas Fit</title>
+// Variável que guarda o índice do pedido que está sendo editado (se houver)
+let editandoIndex = null;
 
-    </head>
+// Adiciona um ouvinte de evento para o envio do formulário
+document.getElementById("formPedido").addEventListener("submit", function (e) {
+  // Evita o recarregamento da página
+  e.preventDefault();
 
-<body>
+  // Pega os valores digitados pelo usuário
+  const nome = document.getElementById("nome").value;
+  const tipo = document.getElementById("tipo").value;
+  const quantidade = parseInt(document.getElementById("quantidade").value);
 
-<h2>Gerenciador de Marmitas Fit</h2>
+  // Pega as restrições alimentares marcadas (checkboxes)
+  const restricoes = [...document.querySelectorAll(".restricao:checked")].map(cb => cb.value);
 
-<!-- Formulário -->
-Nome: <input type="text" id="nome"><br>
+  // Calcula o valor base (R$25 por marmita)
+  let valorTotal = quantidade * 25;
 
-Tipo:
-<select id="tipo">
-    <option value="Low Carb">Low Carb</option>
-    <option value="Vegetariana">Vegetariana</option>
-    <option value="Tradicional">Tradicional</option>
-</select><br>
+  // Se for do tipo vegetariana, aplica 10% de desconto
+  if (tipo === "Vegetariana") valorTotal *= 0.9;
 
-//Quantidade: <input type="number" id="quantidade"><br>
+  // Se tiver pelo menos uma restrição, adiciona R$5 por marmita
+  if (restricoes.length > 0) valorTotal += quantidade * 5;
 
-Restrições:
-<label><input type="checkbox" id="gluten">Sem glúten</label>
-<label><input type="checkbox" id="lactose">Sem lactose</label><br>
+  // Monta o objeto com os dados do pedido
+  const pedido = {
+    nome,
+    tipo,
+    quantidade,
+    restricoes,
+    valorTotal: `R$${valorTotal.toFixed(2)}` // valor formatado com 2 casas decimais
+  };
 
-<button onclick="registrarPedido()" class="btn">Registrar Pedido</button>
+  // Se não estiver editando, adiciona um novo pedido
+  if (editandoIndex === null) {
+    pedidos.push(pedido);
+  } else {
+    // Se estiver editando, substitui o pedido antigo pelo novo
+    pedidos[editandoIndex] = pedido;
+    editandoIndex = null; // volta ao modo normal
+  }
 
-<hr>
+  // Salva os pedidos no LocalStorage
+  localStorage.setItem("pedidos", JSON.stringify(pedidos));
 
-<!-- Tabela dos pedidos -->
-<table>
-    <thead>
-        <tr>
-            <th>Cliente</th>
-            <th>Tipo</th>
-            <th>Qtde</th>
-            <th>Restrições</th>
-            <th>Valor Total</th>
-            <th>Ações</th>
-        </tr>
-    </thead>
-    <tbody id="tabelaPedidos"></tbody>
-</table>
+  // Limpa o formulário
+  this.reset();
 
-<script>
-    // Array que guarda os pedidos
-    let pedidos = JSON.parse(localStorage.getItem('pedidos')) || [];
-    let editandoIndex = null; // Se estiver editando, guarda o índice
+  // Atualiza a tabela com os dados novos
+  renderizarTabela();
+});
 
-    // ✅ Atualiza a tabela sempre que carrega a página
-    window.onload = carregarTabela;
+// Função para desenhar a tabela com os pedidos
+function renderizarTabela() {
+  const tbody = document.getElementById("tabelaPedidos");
+  tbody.innerHTML = ""; // Limpa a tabela antes de preencher de novo
 
-    // 📦 Função para registrar um novo pedido ou atualizar um existente
-    function registrarPedido() {
-        const nome = document.getElementById('nome').value;
-        const tipo = document.getElementById('tipo').value;
-        const quantidade = parseInt(document.getElementById('quantidade').value);
-        const gluten = document.getElementById('gluten').checked;
-        const lactose = document.getElementById('lactose').checked;
+  // Para cada pedido, cria uma nova linha (tr)
+  pedidos.forEach((pedido, index) => {
+    // Garante que restricoes seja uma string (evita erros com .join)
+    const restricoesTexto = Array.isArray(pedido.restricoes)
+      ? pedido.restricoes.join(", ")
+      : pedido.restricoes || "";
 
-        // Verifica quais restrições foram marcadas
-        const restricoes = [];
-        if (gluten) restricoes.push('Sem glúten');
-        if (lactose) restricoes.push('Sem lactose');
+    // Cria a linha da tabela com os dados do pedido
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${pedido.nome}</td>
+      <td>${pedido.tipo}</td>
+      <td>${pedido.quantidade}</td>
+      <td>${restricoesTexto}</td>
+      <td>${pedido.valorTotal}</td>
+      <td>
+        <button onclick="editarPedido(${index})">Editar</button>
+        <button onclick="excluirPedido(${index})">Excluir</button>
+      </td>
+    `;
+    tbody.appendChild(tr); // Adiciona a linha na tabela
+  });
+}
 
-        // Calcula o valor total
-        const valorTotal = calcularValor(tipo, quantidade, restricoes.length);
+// Função chamada quando o botão "Editar" é clicado
+function editarPedido(index) {
+  const pedido = pedidos[index];
 
-        // Cria o objeto do pedido
-        const pedido = {
-            nome,
-            tipo,
-            quantidade,
-            restricoes: restricoes.join(', '),
-            valorTotal: `R$${valorTotal},00`
-        };
+  // Preenche o formulário com os dados existentes
+  document.getElementById("nome").value = pedido.nome;
+  document.getElementById("tipo").value = pedido.tipo;
+  document.getElementById("quantidade").value = pedido.quantidade;
 
-        // Se está editando, atualiza o pedido existente
-        if (editandoIndex !== null) {
-            pedidos[editandoIndex] = pedido;
-            editandoIndex = null;
-        } else {
-            // Senão, adiciona um novo
-            pedidos.push(pedido);
-        }
+  // Marca os checkboxes que estavam selecionados
+  document.querySelectorAll(".restricao").forEach(cb => {
+    cb.checked = Array.isArray(pedido.restricoes) && pedido.restricoes.includes(cb.value);
+  });
 
-        // Salva no LocalStorage
-        localStorage.setItem('pedidos', JSON.stringify(pedidos));
+  // Define o índice do pedido sendo editado
+  editandoIndex = index;
+}
 
-        // Limpa o formulário e atualiza a tabela
-        limparFormulario();
-        carregarTabela();
-    }
+// Função chamada quando o botão "Excluir" é clicado
+function excluirPedido(index) {
+  // Remove o pedido do array
+  pedidos.splice(index, 1);
 
-    // 💰 Calcula o valor total do pedido
-    function calcularValor(tipo, quantidade, qtdRestricoes) {
-        let preco = 25 * quantidade;
+  // Atualiza o LocalStorage
+  localStorage.setItem("pedidos", JSON.stringify(pedidos));
 
-        // Desconto de 10% se for Vegetariana
-        if (tipo === 'Vegetariana') {
-            preco -= preco * 0.10;
-        }
+  // Reatualiza a tabela
+  renderizarTabela();
+}
 
-        // Taxa de R$5 por marmita se houver restrições
-        if (qtdRestricoes > 0) {
-            preco += quantidade * 5;
-        }
-
-        return preco;
-    }
-
-    // 🔁 Carrega os dados na tabela
-    function carregarTabela() {
-        const tabela = document.getElementById('tabelaPedidos');
-        tabela.innerHTML = '';
-
-        pedidos.forEach((pedido, index) => {
-            const linha = `<tr>
-                <td>${pedido.nome}</td>
-                <td>${pedido.tipo}</td>
-                <td>${pedido.quantidade}</td>
-                <td>${pedido.restricoes}</td>
-                <td>${pedido.valorTotal}</td>
-                <td>
-                    <button onclick="editar(${index})" class="btn">Editar</button>
-                    <button onclick="excluir(${index})" class="btn">Excluir</button>
-                </td>
-            </tr>`;
-            tabela.innerHTML += linha;
-        });
-    }
-
-    // ✏️ Função para editar um pedido
-    function editar(index) {
-        const pedido = pedidos[index];
-        document.getElementById('nome').value = pedido.nome;
-        document.getElementById('tipo').value = pedido.tipo;
-        document.getElementById('quantidade').value = pedido.quantidade;
-        document.getElementById('gluten').checked = pedido.restricoes.includes('glúten');
-        document.getElementById('lactose').checked = pedido.restricoes.includes('lactose');
-
-        editandoIndex = index; // Marca que está editando
-    }
-
-    // ❌ Função para excluir um pedido
-    function excluir(index) {
-        if (confirm('Deseja excluir este pedido?')) {
-            pedidos.splice(index, 1); // Remove do array
-            localStorage.setItem('pedidos', JSON.stringify(pedidos)); // Atualiza o LocalStorage
-            carregarTabela(); // Atualiza a tabela
-        }
-    }
-
-    // 🔄 Limpa os campos do formulário
-    function limparFormulario() {
-        document.getElementById('nome').value = '';
-        document.getElementById('tipo').value = 'Low Carb';
-        document.getElementById('quantidade').value = '';
-        document.getElementById('gluten').checked = false;
-        document.getElementById('lactose').checked = false;
-    }
-</script>
-
-</body>
-</html>
+// Ao abrir a página, já renderiza a tabela com os pedidos salvos
+renderizarTabela();
